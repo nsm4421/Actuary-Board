@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { sql } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   integer,
   sqliteTable,
   text,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
+import { userProfiles } from "./user-profiles";
 
 export const users = sqliteTable(
   "users",
@@ -14,7 +15,6 @@ export const users = sqliteTable(
       .primaryKey()
       .$defaultFn(() => randomUUID()),
     email: text("email").notNull(),
-    name: text("name"),
     hashedPassword: text("hashed_password").notNull(),
     createdAt: integer("created_at", { mode: "timestamp" })
       .default(sql`(unixepoch('now') * 1000)`)
@@ -30,3 +30,10 @@ export const users = sqliteTable(
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+
+export const usersRelations = relations(users, ({ one }) => ({
+  profile: one(userProfiles, {
+    fields: [users.id],
+    references: [userProfiles.userId],
+  }),
+}));

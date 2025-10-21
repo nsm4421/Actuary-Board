@@ -26,7 +26,8 @@ export function SignUpForm() {
     resolver: zodResolver(signUpFormSchema),
     defaultValues: {
       email: "",
-      name: "",
+      username: "",
+      bio: "",
       password: "",
       confirmPassword: "",
     },
@@ -43,7 +44,8 @@ export function SignUpForm() {
         body: JSON.stringify({
           email: values.email,
           password: values.password,
-          name: values.name || null,
+          username: values.username.trim(),
+          bio: values.bio?.trim() ? values.bio.trim() : null,
         }),
       });
 
@@ -122,7 +124,7 @@ export function SignUpForm() {
               <FormControl>
                 <Input
                   type="email"
-                  placeholder="you@example.com"
+                  placeholder="karma@example.com"
                   autoComplete="email"
                   {...field}
                 />
@@ -134,15 +136,35 @@ export function SignUpForm() {
 
         <FormField
           control={form.control}
-          name="name"
+          name="username"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>이름</FormLabel>
+              <FormLabel>사용자명</FormLabel>
               <FormControl>
                 <Input
                   type="text"
-                  placeholder="홍길동"
-                  autoComplete="name"
+                  placeholder="karma"
+                  autoComplete="username"
+                  {...field}
+                  maxLength={50}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="bio"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>자기소개</FormLabel>
+              <FormControl>
+                <Input
+                  type="text"
+                  placeholder="자기소개 (입력하지 않아도 됩니다)"
+                  maxLength={30}
                   {...field}
                 />
               </FormControl>

@@ -59,7 +59,7 @@ describe("SignInForm", () => {
 
     renderForm();
 
-    await user.type(screen.getByPlaceholderText("you@example.com"), "login@example.com");
+    await user.type(screen.getByPlaceholderText("karma@example.com"), "login@example.com");
     await user.type(screen.getByPlaceholderText("비밀번호를 입력하세요"), "Password123!");
 
     await user.click(screen.getByRole("button", { name: "로그인" }));
@@ -89,7 +89,7 @@ describe("SignInForm", () => {
 
     renderForm();
 
-    await user.type(screen.getByPlaceholderText("you@example.com"), "login@example.com");
+    await user.type(screen.getByPlaceholderText("karma@example.com"), "login@example.com");
     await user.type(screen.getByPlaceholderText("비밀번호를 입력하세요"), "WrongPassword!");
 
     await user.click(screen.getByRole("button", { name: "로그인" }));

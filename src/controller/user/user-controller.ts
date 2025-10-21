@@ -22,7 +22,9 @@ export class UserController {
     const user = await this.userService.register({
       email: request.email,
       password: request.password,
-      name: request.name ?? null,
+      username: request.username,
+      bio: request.bio ?? null,
+      avatarUrl: request.avatarUrl ?? null,
     });
     return toUserResponse(user);
   }
@@ -48,7 +50,9 @@ export class UserController {
   async updateProfile(request: UpdateProfileRequest): Promise<UserResponse> {
     const user = await this.userService.updateProfile({
       userId: request.userId,
-      name: request.name,
+      username: request.username,
+      bio: request.bio,
+      avatarUrl: request.avatarUrl,
     });
     return toUserResponse(user);
   }

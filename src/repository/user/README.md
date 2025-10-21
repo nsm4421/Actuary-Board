@@ -1,11 +1,11 @@
 # User Repository
 
-Drizzle ORM을 사용해 `users` 테이블과 직접 상호작용하는 데이터 접근 계층입니다. 인터페이스(`user-repository.ts`)와 구현체(`user-repository-impl.ts`)로 구성되어 있으며, 서비스 계층에서 요구하는 CRUD 연산을 제공합니다.
+Drizzle ORM을 사용해 `users` 및 `user_profiles` 테이블과 직접 상호작용하는 데이터 접근 계층입니다. 인터페이스(`user-repository.ts`)와 구현체(`user-repository-impl.ts`)로 구성되어 있으며, 서비스 계층에서 요구하는 핵심 사용자/프로필 CRUD 연산을 제공합니다.
 
 ## 제공 메서드 (`user-repository.ts`)
 
 - `create(input)`  
-  이메일·비밀번호 해시·이름을 받아 새 사용자 레코드를 저장하고, 생성된 사용자를 반환합니다. 해시 형식이 올바르지 않으면 `InvalidPasswordHashError`를 던집니다.
+  이메일, 비밀번호 해시, 사용자명 등을 받아 `users`와 `user_profiles` 레코드를 함께 저장하고, 생성된 사용자 + 프로필을 반환합니다. 해시 형식이 올바르지 않으면 `InvalidPasswordHashError`를 던집니다.
 
 - `findByEmail(email)`  
   정규화된 이메일을 기반으로 사용자를 조회합니다. 없으면 `undefined`를 반환합니다.
@@ -14,10 +14,10 @@ Drizzle ORM을 사용해 `users` 테이블과 직접 상호작용하는 데이�
   사용자 ID로 단일 레코드를 조회합니다.
 
 - `updatePassword(input)`  
-  지정한 사용자 ID의 비밀번호 해시를 업데이트하고, 갱신된 사용자를 반환합니다. 입력값이 SHA-256 형식이 아니면 예외를 던집니다.
+  지정한 사용자 ID의 비밀번호 해시를 업데이트하고, 갱신된 사용자 + 프로필을 반환합니다. 입력값이 SHA-256 형식이 아니면 예외를 던집니다.
 
 - `updateProfile(input)`  
-  사용자의 이름 등 프로필 필드를 갱신합니다.
+  사용자 프로필 필드(사용자명, 소개, 아바타 URL 등)를 갱신하고, 업데이트된 사용자 + 프로필을 반환합니다.
 
 ## 책임
 

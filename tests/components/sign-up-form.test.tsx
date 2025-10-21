@@ -45,7 +45,7 @@ describe("SignUpForm", () => {
       user: {
         id: "id-1",
         email: "test@example.com",
-        name: "Test User",
+        username: "Test User",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       },
@@ -60,8 +60,8 @@ describe("SignUpForm", () => {
 
     renderForm();
 
-    await user.type(screen.getByPlaceholderText("you@example.com"), "test@example.com");
-    await user.type(screen.getByPlaceholderText("홍길동"), "Test User");
+    await user.type(screen.getByPlaceholderText("karma@example.com"), "test@example.com");
+    await user.type(screen.getByPlaceholderText("karma"), "Test User");
     await user.type(
       screen.getByPlaceholderText("비밀번호를 입력하세요"),
       "Password123!",
@@ -99,8 +99,8 @@ describe("SignUpForm", () => {
 
     renderForm();
 
-    await user.type(screen.getByPlaceholderText("you@example.com"), "test@example.com");
-    await user.type(screen.getByPlaceholderText("홍길동"), "Test User");
+    await user.type(screen.getByPlaceholderText("karma@example.com"), "test@example.com");
+    await user.type(screen.getByPlaceholderText("karma"), "Test User");
     await user.type(
       screen.getByPlaceholderText("비밀번호를 입력하세요"),
       "Password123!",

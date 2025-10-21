@@ -13,6 +13,8 @@ export async function signUpAction(data: SignUpRequest) {
   return controller.register({
     email: data.email,
     password: data.password,
-    name: data.name,
+    username: data.username,
+    bio: data.bio ?? null,
+    avatarUrl: data.avatarUrl ?? null,
   });
 }

@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { inject, singleton } from "tsyringe";
-import type { User } from "@/db/schema/users";
 import type {
-  UpdateUserProfileInput as RepositoryUpdateUserProfileInput,
   UserRepository,
+  UserWithProfile,
+  UpdateUserProfileInput as RepositoryUpdateUserProfileInput,
 } from "@/repository/user/user-repository";
 import { UserRepositoryToken } from "@/repository/di";
 import type {
@@ -30,10 +30,15 @@ export class DefaultUserServiceImpl implements UserService {
     if (existing) {
       throw new Error("User already exists");
     }
+    const username = this.normalizeUsername(input.username);
+    const bio = this.normalizeNullableText(input.bio, 30);
+    const avatarUrl = this.normalizeNullableText(input.avatarUrl);
     const created = await this.userRepository.create({
       email,
       hashedPassword,
-      name: input.name ?? null,
+      username,
+      bio,
+      avatarUrl,
     });
     return toUserModel(created);
   }
@@ -79,7 +84,18 @@ export class DefaultUserServiceImpl implements UserService {
   ): Promise<UserModel> {
     const repositoryInput: RepositoryUpdateUserProfileInput = {
       id: input.userId,
-      name: input.name,
+      username:
+        input.username !== undefined
+          ? this.normalizeUsername(input.username)
+          : undefined,
+      bio:
+        input.bio !== undefined
+          ? this.normalizeNullableText(input.bio, 30)
+          : undefined,
+      avatarUrl:
+        input.avatarUrl !== undefined
+          ? this.normalizeNullableText(input.avatarUrl)
+          : undefined,
     };
     const updated = await this.userRepository.updateProfile(repositoryInput);
     return this.ensureUser(updated, "Failed to update profile: user not found");
@@ -89,7 +105,35 @@ export class DefaultUserServiceImpl implements UserService {
     return email.trim().toLowerCase();
   }
 
-  private ensureUser(user: User | undefined, message: string): UserModel {
+  private normalizeUsername(username: string): string {
+    const trimmed = username.trim();
+    if (!trimmed) {
+      throw new Error("Username is required");
+    }
+    return trimmed;
+  }
+
+  private normalizeNullableText(
+    value: string | null | undefined,
+    maxLength?: number,
+  ): string | null {
+    if (value === undefined || value === null) {
+      return null;
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    if (maxLength !== undefined && trimmed.length > maxLength) {
+      throw new Error(`Value must be at most ${maxLength} characters long`);
+    }
+    return trimmed;
+  }
+
+  private ensureUser(
+    user: UserWithProfile | undefined,
+    message: string,
+  ): UserModel {
     if (!user) {
       throw new Error(message);
     }

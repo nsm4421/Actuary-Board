@@ -122,7 +122,7 @@ export function SignInForm() {
               <FormControl>
                 <Input
                   type="email"
-                  placeholder="you@example.com"
+                  placeholder="karma@example.com"
                   autoComplete="email"
                   {...field}
                 />

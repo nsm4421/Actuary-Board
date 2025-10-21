@@ -12,8 +12,10 @@ import type {
   UpdateUserPasswordInput,
   UpdateUserProfileInput as RepositoryUpdateUserProfileInput,
   UserRepository,
+  UserWithProfile,
 } from "@/repository/user/user-repository";
 import type { User } from "@/db/schema/users";
+import type { UserProfile } from "@/db/schema/user-profiles";
 import { InvalidCredentialsError } from "@/service/user/errors";
 import { InvalidPasswordHashError } from "@/core/errors/password";
 
@@ -25,6 +27,7 @@ const hashPassword = (password: string) =>
 
 class InMemoryUserRepository implements UserRepository {
   private users = new Map<string, User>();
+  private profiles = new Map<string, UserProfile>();
 
   private assertHash(hash: string) {
     const sha256Regex = /^[a-f0-9]{64}$/i;
@@ -33,34 +36,55 @@ class InMemoryUserRepository implements UserRepository {
     }
   }
 
-  async create(input: CreateUserInput): Promise<User> {
+  private combineUser(user: User | undefined): UserWithProfile | undefined {
+    if (!user) {
+      return undefined;
+    }
+    const profile = this.profiles.get(user.id) ?? null;
+    return {
+      ...user,
+      profile,
+    };
+  }
+
+  async create(input: CreateUserInput): Promise<UserWithProfile> {
     this.assertHash(input.hashedPassword);
     const now = new Date();
     const user: User = {
       id: randomUUID(),
       email: input.email,
-      name: input.name ?? null,
       hashedPassword: input.hashedPassword,
       createdAt: now,
       updatedAt: now,
     };
+    const profile: UserProfile = {
+      userId: user.id,
+      username: input.username,
+      bio: input.bio ?? null,
+      avatarUrl: input.avatarUrl ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
     this.users.set(user.id, user);
-    return user;
+    this.profiles.set(user.id, profile);
+    return this.combineUser(user)!;
   }
 
-  async findByEmail(email: string): Promise<User | undefined> {
-    return [...this.users.values()].find(
+  async findByEmail(email: string): Promise<UserWithProfile | undefined> {
+    const user = [...this.users.values()].find(
       (user) => user.email.toLowerCase() === email.toLowerCase(),
     );
+    return this.combineUser(user);
   }
 
-  async findById(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async findById(id: string): Promise<UserWithProfile | undefined> {
+    const user = this.users.get(id);
+    return this.combineUser(user);
   }
 
   async updatePassword(
     input: UpdateUserPasswordInput,
-  ): Promise<User | undefined> {
+  ): Promise<UserWithProfile | undefined> {
     this.assertHash(input.hashedPassword);
     const user = this.users.get(input.id);
     if (!user) {
@@ -72,23 +96,37 @@ class InMemoryUserRepository implements UserRepository {
       updatedAt: new Date(),
     };
     this.users.set(input.id, updated);
-    return updated;
+    return this.combineUser(updated);
   }
 
   async updateProfile(
     input: RepositoryUpdateUserProfileInput,
-  ): Promise<User | undefined> {
+  ): Promise<UserWithProfile | undefined> {
+    const profile = this.profiles.get(input.id);
     const user = this.users.get(input.id);
-    if (!user) {
+    if (!profile || !user) {
       return undefined;
     }
-    const updated: User = {
-      ...user,
-      name: input.name,
-      updatedAt: new Date(),
+
+    const now = new Date();
+    const updatedProfile: UserProfile = {
+      ...profile,
+      username:
+        input.username !== undefined ? input.username : profile.username,
+      bio: input.bio !== undefined ? input.bio : profile.bio,
+      avatarUrl:
+        input.avatarUrl !== undefined ? input.avatarUrl : profile.avatarUrl,
+      updatedAt: now,
     };
-    this.users.set(input.id, updated);
-    return updated;
+    const updatedUser: User = {
+      ...user,
+      updatedAt: now,
+    };
+
+    this.profiles.set(input.id, updatedProfile);
+    this.users.set(input.id, updatedUser);
+
+    return this.combineUser(updatedUser);
   }
 }
 
@@ -105,7 +143,9 @@ describe("DefaultUserServiceImpl", () => {
     service.register({
       email: "user@example.com",
       password: RAW_PASSWORD,
-      name: "User",
+      username: "user",
+      bio: null,
+      avatarUrl: null,
       ...overrides,
     });
 
@@ -115,6 +155,8 @@ describe("DefaultUserServiceImpl", () => {
 
       const stored = await repository.findById(result.id);
       expect(stored?.hashedPassword).toBe(hashPassword(RAW_PASSWORD));
+      expect(result.username).toBe("user");
+      expect(result.bio).toBeNull();
     });
 
     it("normalizes email to lowercase", async () => {
@@ -157,6 +199,7 @@ describe("DefaultUserServiceImpl", () => {
 
       expect(result.id).toBe(registered.id);
       expect(result.email).toBe("user@example.com");
+      expect(result.username).toBe("user");
     });
   });
 
@@ -166,12 +209,16 @@ describe("DefaultUserServiceImpl", () => {
 
       const input: UpdateUserProfileInput = {
         userId: user.id,
-        name: "Updated Name",
+        username: "updated_user",
+        bio: "Hello",
+        avatarUrl: "https://example.com/avatar.png",
       };
 
       const updated = await service.updateProfile(input);
 
-      expect(updated.name).toBe("Updated Name");
+      expect(updated.username).toBe("updated_user");
+      expect(updated.bio).toBe("Hello");
+      expect(updated.avatarUrl).toBe("https://example.com/avatar.png");
     });
   });
 });

@@ -30,7 +30,9 @@ describe("DrizzleUserRepository", () => {
   ): CreateUserInput => ({
     email: "User@Example.com",
     hashedPassword: HASHED_PASSWORD,
-    name: "Tester",
+    username: "tester",
+    bio: "Hello",
+    avatarUrl: null,
     ...overrides,
   });
 
@@ -40,8 +42,10 @@ describe("DrizzleUserRepository", () => {
 
       expect(created.id).toBeTruthy();
       expect(created.email).toBe("user@example.com");
-      expect(created.name).toBe("Tester");
       expect(created.hashedPassword).toBe(HASHED_PASSWORD);
+      expect(created.profile).not.toBeNull();
+      expect(created.profile?.username).toBe("tester");
+      expect(created.profile?.bio).toBe("Hello");
       expect(created.createdAt).toBeInstanceOf(Date);
       expect(created.updatedAt).toBeInstanceOf(Date);
     });
@@ -59,9 +63,7 @@ describe("DrizzleUserRepository", () => {
     it("throws when creating user with duplicate email", async () => {
       await repository.create(buildCreateInput());
 
-      await expect(
-        repository.create(buildCreateInput({ name: "Another" })),
-      ).rejects.toThrow();
+      await expect(repository.create(buildCreateInput())).rejects.toThrow();
     });
   });
 
@@ -74,6 +76,7 @@ describe("DrizzleUserRepository", () => {
       expect(found).toBeDefined();
       expect(found?.id).toBe(created.id);
       expect(found?.email).toBe(created.email);
+      expect(found?.profile?.username).toBe("tester");
     });
 
     it("returns undefined when finding by unknown email", async () => {
@@ -90,6 +93,7 @@ describe("DrizzleUserRepository", () => {
 
       expect(found).toBeDefined();
       expect(found?.id).toBe(created.id);
+      expect(found?.profile?.username).toBe("tester");
     });
 
     it("returns undefined when finding by unknown id", async () => {
@@ -113,6 +117,7 @@ describe("DrizzleUserRepository", () => {
       expect(updated?.updatedAt.getTime()).toBeGreaterThanOrEqual(
         created.updatedAt.getTime(),
       );
+      expect(updated?.profile?.username).toBe("tester");
     });
 
     it("returns undefined when updating password for unknown user", async () => {
@@ -136,26 +141,33 @@ describe("DrizzleUserRepository", () => {
   });
 
   describe("updateProfile()", () => {
-    it("updates a user profile", async () => {
-      const created = await repository.create(buildCreateInput({ name: null }));
+    it("updates profile fields and touch user timestamp", async () => {
+      const created = await repository.create(buildCreateInput());
       const input: UpdateUserProfileInput = {
         id: created.id,
-        name: "Updated Name",
+        username: "newtester",
+        bio: "Updated bio",
+        avatarUrl: "https://example.com/avatar.png",
       };
 
       const updated = await repository.updateProfile(input);
 
       expect(updated).toBeDefined();
-      expect(updated?.name).toBe("Updated Name");
+      expect(updated?.profile?.username).toBe("newtester");
+      expect(updated?.profile?.bio).toBe("Updated bio");
+      expect(updated?.profile?.avatarUrl).toBe("https://example.com/avatar.png");
+      expect(updated?.profile?.updatedAt.getTime()).toBeGreaterThanOrEqual(
+        created.profile?.updatedAt.getTime() ?? 0,
+      );
       expect(updated?.updatedAt.getTime()).toBeGreaterThanOrEqual(
         created.updatedAt.getTime(),
       );
     });
 
-    it("returns undefined when updating profile for unknown user", async () => {
+    it("returns undefined when profile is missing", async () => {
       const result = await repository.updateProfile({
         id: "missing",
-        name: "Name",
+        username: "unknown",
       });
       expect(result).toBeUndefined();
     });

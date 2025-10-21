@@ -28,7 +28,7 @@ describe("Auth API routes", () => {
       const request = jsonRequest("http://localhost/api/sign-up", {
         email: "TestUser@example.com",
         password: "Password123!",
-        name: "Test User",
+        username: "Test User",
       });
 
       const response = await signUp(request);
@@ -44,7 +44,7 @@ describe("Auth API routes", () => {
       const payload = {
         email: "duplicate@example.com",
         password: "Password123!",
-        name: "User",
+        username: "User",
       };
 
       await signUp(jsonRequest("http://localhost/api/sign-up", payload));
@@ -59,7 +59,7 @@ describe("Auth API routes", () => {
       const request = jsonRequest("http://localhost/api/sign-up", {
         email: "not-an-email",
         password: "short",
-        name: "User",
+        username: "User",
       });
 
       const response = await signUp(request);
@@ -78,7 +78,7 @@ describe("Auth API routes", () => {
         jsonRequest("http://localhost/api/sign-up", {
           email,
           password,
-          name: "User",
+          username: "User",
         }),
       );
 
@@ -102,7 +102,7 @@ describe("Auth API routes", () => {
         jsonRequest("http://localhost/api/sign-up", {
           email,
           password: "Password123!",
-          name: "User",
+          username: "User",
         }),
       );
 

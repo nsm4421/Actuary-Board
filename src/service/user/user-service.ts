@@ -4,7 +4,9 @@ import type { UserModel } from "@/model/user/user";
 export interface RegisterUserInput {
   email: string;
   password: string;
-  name?: string | null;
+  username: string;
+  bio?: string | null;
+  avatarUrl?: string | null;
 }
 
 export interface ChangeUserPasswordInput {
@@ -14,7 +16,9 @@ export interface ChangeUserPasswordInput {
 
 export interface UpdateUserProfileInput {
   userId: string;
-  name: string | null;
+  username?: string;
+  bio?: string | null;
+  avatarUrl?: string | null;
 }
 
 export interface UserService {

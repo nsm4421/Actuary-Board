@@ -15,7 +15,8 @@ export default function Home() {
 
       {user ? (
         <div className="text-center text-sm text-muted-foreground">
-          <p>이름: {user.name ?? "등록되지 않음"}</p>
+          <p>사용자명: {user.username}</p>
+          <p>소개: {user.bio ?? "등록되지 않음"}</p>
           <p>가입일: {new Date(user.createdAt).toLocaleString()}</p>
         </div>
       ) : (
