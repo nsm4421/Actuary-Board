@@ -11,6 +11,7 @@ import { inject, singleton } from "tsyringe";
 import type { DatabaseClient } from "@/db/client";
 import { users, type NewUser, type User } from "@/db/schema/users";
 import { DatabaseClientToken } from "@/db/di";
+import { InvalidPasswordHashError } from "@/core/errors/password";
 
 @singleton()
 export class DrizzleUserRepository implements UserRepository {
@@ -31,7 +32,15 @@ export class DrizzleUserRepository implements UserRepository {
     };
   };
 
+  private assertHashedPassword(hash: string): void {
+    const sha256Regex = /^[a-f0-9]{64}$/i;
+    if (!sha256Regex.test(hash)) {
+      throw new InvalidPasswordHashError();
+    }
+  }
+
   async create(input: CreateUserInput): Promise<User> {
+    this.assertHashedPassword(input.hashedPassword);
     const record = this.buildNewUser(input);
     this.client.transaction((tx) => {
       tx.insert(users).values(record).run();
@@ -62,6 +71,7 @@ export class DrizzleUserRepository implements UserRepository {
     id,
     hashedPassword,
   }: UpdateUserPasswordInput): Promise<User | undefined> {
+    this.assertHashedPassword(hashedPassword);
     const now = new Date();
     await this.client
       .update(users)

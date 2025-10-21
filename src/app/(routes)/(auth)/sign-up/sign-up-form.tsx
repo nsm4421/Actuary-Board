@@ -3,6 +3,7 @@
 import { useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 import {
   Form,
   FormControl,
@@ -15,7 +16,12 @@ import { Input } from "@/core/shadcn/components/ui/input";
 import { Button } from "@/core/shadcn/components/ui/button";
 import { signUpFormSchema, SignUpFormValues } from "@/core/validators/sign-up";
 
+import type { UserModel } from "@/model/user/user";
+import { useUserStore } from "@/app/_stores/user/user-store";
+
 export function SignUpForm() {
+  const router = useRouter();
+  const setUser = useUserStore((state) => state.setUser);
   const form = useForm<SignUpFormValues>({
     resolver: zodResolver(signUpFormSchema),
     defaultValues: {
@@ -33,6 +39,7 @@ export function SignUpForm() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify({
           email: values.email,
           password: values.password,
@@ -40,15 +47,22 @@ export function SignUpForm() {
         }),
       });
 
-      if (!response.ok) {
-        const data = (await response.json().catch(() => ({}))) as {
-          error?: string;
-        };
-        throw new Error(data.error ?? "회원가입에 실패했습니다.");
+      const result = (await response.json().catch(() => null)) as {
+        user?: UserModel;
+        error?: string;
+      } | null;
+
+      if (!response.ok || !result?.user) {
+        throw new Error(
+          result?.error ?? "회원가입에 실패했습니다. 다시 시도해주세요."
+        );
       }
+
+      setUser(result.user);
 
       toast.success("회원가입이 완료되었습니다.");
       form.reset();
+      router.replace("/");
     } catch (error) {
       const message =
         error instanceof Error

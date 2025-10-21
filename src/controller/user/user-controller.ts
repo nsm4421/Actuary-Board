@@ -1,14 +1,15 @@
 import "reflect-metadata";
-import { createHash } from "node:crypto";
 import { inject, singleton } from "tsyringe";
-import type { User } from "@/db/schema/users";
 import type { UserService } from "@/service/user/user-service";
 import { UserServiceToken } from "@/service/di";
 import type {
   RegisterUserRequest,
+  LoginUserRequest,
   UpdatePasswordRequest,
   UpdateProfileRequest,
+  UserResponse,
 } from "@/controller/user/dto";
+import { toUserResponse } from "@/controller/user/serializers";
 
 @singleton()
 export class UserController {
@@ -17,37 +18,46 @@ export class UserController {
     private readonly userService: UserService,
   ) {}
 
-  async register(request: RegisterUserRequest): Promise<User> {
-    return this.userService.register({
+  async register(request: RegisterUserRequest): Promise<UserResponse> {
+    const user = await this.userService.register({
       email: request.email,
-      hashedPassword: this.hashPassword(request.password),
+      password: request.password,
       name: request.name ?? null,
     });
+    return toUserResponse(user);
   }
 
-  getById(userId: string): Promise<User | undefined> {
-    return this.userService.getById(userId);
+  async getById(userId: string): Promise<UserResponse | undefined> {
+    const user = await this.userService.getById(userId);
+    return user ? toUserResponse(user) : undefined;
   }
 
-  getByEmail(email: string): Promise<User | undefined> {
-    return this.userService.getByEmail(email);
+  async getByEmail(email: string): Promise<UserResponse | undefined> {
+    const user = await this.userService.getByEmail(email);
+    return user ? toUserResponse(user) : undefined;
   }
 
-  changePassword(request: UpdatePasswordRequest): Promise<User> {
-    return this.userService.changePassword({
-      id: request.userId,
-      hashedPassword: this.hashPassword(request.password),
+  async changePassword(request: UpdatePasswordRequest): Promise<UserResponse> {
+    const user = await this.userService.changePassword({
+      userId: request.userId,
+      password: request.password,
     });
+    return toUserResponse(user);
   }
 
-  updateProfile(request: UpdateProfileRequest): Promise<User> {
-    return this.userService.updateProfile({
-      id: request.userId,
+  async updateProfile(request: UpdateProfileRequest): Promise<UserResponse> {
+    const user = await this.userService.updateProfile({
+      userId: request.userId,
       name: request.name,
     });
+    return toUserResponse(user);
   }
 
-  private hashPassword(password: string): string {
-    return createHash("sha256").update(password).digest("hex");
+  async login(request: LoginUserRequest): Promise<UserResponse> {
+    const user = await this.userService.authenticate(
+      request.email,
+      request.password,
+    );
+    return toUserResponse(user);
   }
 }
