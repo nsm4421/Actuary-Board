@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { describe, it, expect, beforeEach } from "vitest";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { DefaultUserServiceImpl } from "@/service/user/user-service-impl";
 import type {
   ChangeUserPasswordInput,
@@ -8,7 +8,9 @@ import type {
   UpdateUserProfileInput,
 } from "@/service/user/user-service";
 import type {
-  CreateUserInput,
+  InsertUserInput,
+  InsertUserProfileInput,
+  TouchUserInput,
   UpdateUserPasswordInput,
   UpdateUserProfileInput as RepositoryUpdateUserProfileInput,
   UserRepository,
@@ -47,32 +49,43 @@ class InMemoryUserRepository implements UserRepository {
     };
   }
 
-  async create(input: CreateUserInput): Promise<UserWithProfile> {
+  async insertUser(input: InsertUserInput): Promise<void> {
     this.assertHash(input.hashedPassword);
-    const now = new Date();
-    const user: User = {
-      id: randomUUID(),
+    this.users.set(input.id, {
+      id: input.id,
       email: input.email,
       hashedPassword: input.hashedPassword,
-      createdAt: now,
-      updatedAt: now,
-    };
-    const profile: UserProfile = {
-      userId: user.id,
+      createdAt: input.createdAt,
+      updatedAt: input.updatedAt,
+    });
+  }
+
+  async insertUserProfile(input: InsertUserProfileInput): Promise<void> {
+    this.profiles.set(input.userId, {
+      userId: input.userId,
       username: input.username,
       bio: input.bio ?? null,
       avatarUrl: input.avatarUrl ?? null,
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.users.set(user.id, user);
-    this.profiles.set(user.id, profile);
-    return this.combineUser(user)!;
+      createdAt: input.createdAt,
+      updatedAt: input.updatedAt,
+    });
+  }
+
+  async touchUser(input: TouchUserInput): Promise<boolean> {
+    const user = this.users.get(input.id);
+    if (!user) {
+      return false;
+    }
+    this.users.set(input.id, {
+      ...user,
+      updatedAt: input.updatedAt,
+    });
+    return true;
   }
 
   async findByEmail(email: string): Promise<UserWithProfile | undefined> {
     const user = [...this.users.values()].find(
-      (user) => user.email.toLowerCase() === email.toLowerCase(),
+      (candidate) => candidate.email.toLowerCase() === email.toLowerCase(),
     );
     return this.combineUser(user);
   }
@@ -84,49 +97,37 @@ class InMemoryUserRepository implements UserRepository {
 
   async updatePassword(
     input: UpdateUserPasswordInput,
-  ): Promise<UserWithProfile | undefined> {
+  ): Promise<boolean> {
     this.assertHash(input.hashedPassword);
     const user = this.users.get(input.id);
     if (!user) {
-      return undefined;
+      return false;
     }
-    const updated: User = {
+    this.users.set(input.id, {
       ...user,
       hashedPassword: input.hashedPassword,
-      updatedAt: new Date(),
-    };
-    this.users.set(input.id, updated);
-    return this.combineUser(updated);
+      updatedAt: input.updatedAt,
+    });
+    return true;
   }
 
   async updateProfile(
     input: RepositoryUpdateUserProfileInput,
-  ): Promise<UserWithProfile | undefined> {
+  ): Promise<boolean> {
     const profile = this.profiles.get(input.id);
-    const user = this.users.get(input.id);
-    if (!profile || !user) {
-      return undefined;
+    if (!profile) {
+      return false;
     }
-
-    const now = new Date();
-    const updatedProfile: UserProfile = {
+    this.profiles.set(input.id, {
       ...profile,
       username:
         input.username !== undefined ? input.username : profile.username,
       bio: input.bio !== undefined ? input.bio : profile.bio,
       avatarUrl:
         input.avatarUrl !== undefined ? input.avatarUrl : profile.avatarUrl,
-      updatedAt: now,
-    };
-    const updatedUser: User = {
-      ...user,
-      updatedAt: now,
-    };
-
-    this.profiles.set(input.id, updatedProfile);
-    this.users.set(input.id, updatedUser);
-
-    return this.combineUser(updatedUser);
+      updatedAt: input.updatedAt,
+    });
+    return true;
   }
 }
 
@@ -221,4 +222,6 @@ describe("DefaultUserServiceImpl", () => {
       expect(updated.avatarUrl).toBe("https://example.com/avatar.png");
     });
   });
+
+  // transaction rollback scenario is covered in dedicated integration tests
 });

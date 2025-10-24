@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { randomUUID } from "node:crypto";
 import { DrizzleUserRepository } from "@/repository/user/user-repository-impl";
 import type {
-  CreateUserInput,
+  InsertUserInput,
+  InsertUserProfileInput,
+  TouchUserInput,
   UpdateUserPasswordInput,
   UpdateUserProfileInput,
 } from "@/repository/user/user-repository";
@@ -25,57 +28,87 @@ describe("DrizzleUserRepository", () => {
     sqlite.close();
   });
 
-  const buildCreateInput = (
-    overrides: Partial<CreateUserInput> = {},
-  ): CreateUserInput => ({
-    email: "User@Example.com",
-    hashedPassword: HASHED_PASSWORD,
-    username: "tester",
-    bio: "Hello",
-    avatarUrl: null,
-    ...overrides,
-  });
+  const buildInsertInputs = (
+    overrides: Partial<InsertUserInput & InsertUserProfileInput> = {},
+  ): {
+    user: InsertUserInput;
+    profile: InsertUserProfileInput;
+  } => {
+    const now = new Date();
+    const id = randomUUID();
+    return {
+      user: {
+        id,
+        email: "User@Example.com",
+        hashedPassword: HASHED_PASSWORD,
+        createdAt: now,
+        updatedAt: now,
+        ...overrides,
+      },
+      profile: {
+        userId: id,
+        username: "tester",
+        bio: "Hello",
+        avatarUrl: null,
+        createdAt: now,
+        updatedAt: now,
+        ...overrides,
+      },
+    };
+  };
 
-  describe("create()", () => {
+  const createUser = async (
+    overrides: Partial<InsertUserInput & InsertUserProfileInput> = {},
+  ) => {
+    const { user, profile } = buildInsertInputs(overrides);
+    await repository.insertUser(user);
+    await repository.insertUserProfile(profile);
+    return repository.findById(user.id);
+  };
+
+  describe("insertUser() and insertUserProfile()", () => {
     it("creates a new user with normalized email", async () => {
-      const created = await repository.create(buildCreateInput());
+      const { user, profile } = buildInsertInputs();
+      await repository.insertUser(user);
+      await repository.insertUserProfile(profile);
 
-      expect(created.id).toBeTruthy();
-      expect(created.email).toBe("user@example.com");
-      expect(created.hashedPassword).toBe(HASHED_PASSWORD);
-      expect(created.profile).not.toBeNull();
-      expect(created.profile?.username).toBe("tester");
-      expect(created.profile?.bio).toBe("Hello");
-      expect(created.createdAt).toBeInstanceOf(Date);
-      expect(created.updatedAt).toBeInstanceOf(Date);
+      const created = await repository.findById(user.id);
+      expect(created?.id).toBeTruthy();
+      expect(created?.email).toBe("user@example.com");
+      expect(created?.hashedPassword).toBe(HASHED_PASSWORD);
+      expect(created?.profile?.username).toBe("tester");
+      expect(created?.profile?.bio).toBe("Hello");
+      expect(created?.createdAt).toBeInstanceOf(Date);
+      expect(created?.updatedAt).toBeInstanceOf(Date);
     });
 
     it("throws when password hash is invalid", async () => {
-      await expect(
-        repository.create(
-          buildCreateInput({
-            hashedPassword: "not-a-hash",
-          }),
-        ),
-      ).rejects.toBeInstanceOf(InvalidPasswordHashError);
+      const { user } = buildInsertInputs({
+        hashedPassword: "not-a-hash",
+      });
+      await expect(repository.insertUser(user)).rejects.toBeInstanceOf(
+        InvalidPasswordHashError,
+      );
     });
 
     it("throws when creating user with duplicate email", async () => {
-      await repository.create(buildCreateInput());
+      const { user, profile } = buildInsertInputs();
+      await repository.insertUser(user);
+      await repository.insertUserProfile(profile);
 
-      await expect(repository.create(buildCreateInput())).rejects.toThrow();
+      await expect(repository.insertUser(user)).rejects.toThrow();
     });
   });
 
   describe("findByEmail()", () => {
     it("finds a user by email", async () => {
-      const created = await repository.create(buildCreateInput());
+      const created = await createUser();
 
       const found = await repository.findByEmail("user@example.com");
 
       expect(found).toBeDefined();
-      expect(found?.id).toBe(created.id);
-      expect(found?.email).toBe(created.email);
+      expect(found?.id).toBe(created?.id);
+      expect(found?.email).toBe(created?.email);
       expect(found?.profile?.username).toBe("tester");
     });
 
@@ -87,12 +120,12 @@ describe("DrizzleUserRepository", () => {
 
   describe("findById()", () => {
     it("finds a user by id", async () => {
-      const created = await repository.create(buildCreateInput());
+      const created = await createUser();
 
-      const found = await repository.findById(created.id);
+      const found = await repository.findById(created!.id);
 
       expect(found).toBeDefined();
-      expect(found?.id).toBe(created.id);
+      expect(found?.id).toBe(created?.id);
       expect(found?.profile?.username).toBe("tester");
     });
 
@@ -104,72 +137,108 @@ describe("DrizzleUserRepository", () => {
 
   describe("updatePassword()", () => {
     it("updates a user password", async () => {
-      const created = await repository.create(buildCreateInput());
+      const created = await createUser();
       const input: UpdateUserPasswordInput = {
-        id: created.id,
+        id: created!.id,
         hashedPassword: OTHER_HASHED_PASSWORD,
+        updatedAt: new Date(),
       };
 
-      const updated = await repository.updatePassword(input);
+      const previousUpdatedAt = created!.updatedAt.getTime();
+      const success = await repository.updatePassword(input);
+      expect(success).toBe(true);
 
-      expect(updated).toBeDefined();
+      const updated = await repository.findById(created!.id);
       expect(updated?.hashedPassword).toBe(OTHER_HASHED_PASSWORD);
       expect(updated?.updatedAt.getTime()).toBeGreaterThanOrEqual(
-        created.updatedAt.getTime(),
+        previousUpdatedAt,
       );
       expect(updated?.profile?.username).toBe("tester");
     });
 
-    it("returns undefined when updating password for unknown user", async () => {
+    it("returns false when updating password for unknown user", async () => {
       const result = await repository.updatePassword({
         id: "unknown",
         hashedPassword: HASHED_PASSWORD,
+        updatedAt: new Date(),
       });
-      expect(result).toBeUndefined();
+      expect(result).toBe(false);
     });
 
     it("throws when new password hash is invalid", async () => {
-      const created = await repository.create(buildCreateInput());
+      const created = await createUser();
 
       await expect(
         repository.updatePassword({
-          id: created.id,
+          id: created!.id,
           hashedPassword: "invalid",
+          updatedAt: new Date(),
         }),
       ).rejects.toBeInstanceOf(InvalidPasswordHashError);
     });
   });
 
   describe("updateProfile()", () => {
-    it("updates profile fields and touch user timestamp", async () => {
-      const created = await repository.create(buildCreateInput());
+    it("updates profile fields", async () => {
+      const created = await createUser();
       const input: UpdateUserProfileInput = {
-        id: created.id,
+        id: created!.id,
         username: "newtester",
         bio: "Updated bio",
         avatarUrl: "https://example.com/avatar.png",
+        updatedAt: new Date(),
       };
 
-      const updated = await repository.updateProfile(input);
+      const previousProfileUpdatedAt =
+        created?.profile?.updatedAt.getTime() ?? 0;
+      const success = await repository.updateProfile(input);
+      expect(success).toBe(true);
 
-      expect(updated).toBeDefined();
-      expect(updated?.profile?.username).toBe("newtester");
-      expect(updated?.profile?.bio).toBe("Updated bio");
-      expect(updated?.profile?.avatarUrl).toBe("https://example.com/avatar.png");
-      expect(updated?.profile?.updatedAt.getTime()).toBeGreaterThanOrEqual(
-        created.profile?.updatedAt.getTime() ?? 0,
+      const updatedProfile = await repository.findById(created!.id);
+      expect(updatedProfile?.profile?.username).toBe("newtester");
+      expect(updatedProfile?.profile?.bio).toBe("Updated bio");
+      expect(updatedProfile?.profile?.avatarUrl).toBe(
+        "https://example.com/avatar.png",
       );
-      expect(updated?.updatedAt.getTime()).toBeGreaterThanOrEqual(
-        created.updatedAt.getTime(),
+      expect(updatedProfile?.profile?.updatedAt.getTime()).toBeGreaterThanOrEqual(
+        previousProfileUpdatedAt,
       );
     });
 
-    it("returns undefined when profile is missing", async () => {
+    it("returns false when profile is missing", async () => {
       const result = await repository.updateProfile({
         id: "missing",
         username: "unknown",
+        updatedAt: new Date(),
       });
-      expect(result).toBeUndefined();
+      expect(result).toBe(false);
+    });
+  });
+
+  describe("touchUser()", () => {
+    it("updates user timestamp when record exists", async () => {
+      const created = await createUser();
+      const payload: TouchUserInput = {
+        id: created!.id,
+        updatedAt: new Date(),
+      };
+
+      const previousUpdatedAt = created!.updatedAt.getTime();
+      const touched = await repository.touchUser(payload);
+      expect(touched).toBe(true);
+
+      const refreshed = await repository.findById(created!.id);
+      expect(refreshed?.updatedAt.getTime()).toBeGreaterThanOrEqual(
+        previousUpdatedAt,
+      );
+    });
+
+    it("returns false when record is missing", async () => {
+      const result = await repository.touchUser({
+        id: "missing",
+        updatedAt: new Date(),
+      });
+      expect(result).toBe(false);
     });
   });
 });

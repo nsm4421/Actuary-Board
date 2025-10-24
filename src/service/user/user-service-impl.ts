@@ -1,9 +1,8 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { inject, singleton } from "tsyringe";
 import type {
   UserRepository,
   UserWithProfile,
-  UpdateUserProfileInput as RepositoryUpdateUserProfileInput,
 } from "@/repository/user/user-repository";
 import { UserRepositoryToken } from "@/repository/di";
 import type {
@@ -15,6 +14,7 @@ import type {
 import { InvalidCredentialsError } from "@/service/user/errors";
 import { toUserModel } from "@/service/user/mappers";
 import type { UserModel } from "@/model/user/user";
+import { Transactional } from "@/core/decorators/transactional";
 
 @singleton()
 export class DefaultUserServiceImpl implements UserService {
@@ -23,6 +23,7 @@ export class DefaultUserServiceImpl implements UserService {
     private readonly userRepository: UserRepository,
   ) {}
 
+  @Transactional()
   async register(input: RegisterUserInput): Promise<UserModel> {
     const email = this.normalizeEmail(input.email);
     const hashedPassword = this.hashPassword(input.password);
@@ -33,13 +34,30 @@ export class DefaultUserServiceImpl implements UserService {
     const username = this.normalizeUsername(input.username);
     const bio = this.normalizeNullableText(input.bio, 30);
     const avatarUrl = this.normalizeNullableText(input.avatarUrl);
-    const created = await this.userRepository.create({
+    const now = new Date();
+    const id = randomUUID();
+
+    await this.userRepository.insertUser({
+      id,
       email,
       hashedPassword,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await this.userRepository.insertUserProfile({
+      userId: id,
       username,
       bio,
       avatarUrl,
+      createdAt: now,
+      updatedAt: now,
     });
+
+    const created = await this.userRepository.findById(id);
+    if (!created) {
+      throw new Error("Failed to persist user record");
+    }
     return toUserModel(created);
   }
 
@@ -68,21 +86,31 @@ export class DefaultUserServiceImpl implements UserService {
     return toUserModel(user);
   }
 
+  @Transactional()
   async changePassword(
     input: ChangeUserPasswordInput,
   ): Promise<UserModel> {
     const hashedPassword = this.hashPassword(input.password);
-    const updated = await this.userRepository.updatePassword({
+    const updatedAt = new Date();
+    const success = await this.userRepository.updatePassword({
       id: input.userId,
       hashedPassword,
+      updatedAt,
     });
-    return this.ensureUser(updated, "Failed to update password: user not found");
+    if (!success) {
+      throw new Error("Failed to update password: user not found");
+    }
+
+    const refreshed = await this.userRepository.findById(input.userId);
+    return this.ensureUser(refreshed, "Failed to update password: user not found");
   }
 
+  @Transactional()
   async updateProfile(
     input: UpdateUserProfileInput,
   ): Promise<UserModel> {
-    const repositoryInput: RepositoryUpdateUserProfileInput = {
+    const updatedAt = new Date();
+    const payload = {
       id: input.userId,
       username:
         input.username !== undefined
@@ -97,7 +125,25 @@ export class DefaultUserServiceImpl implements UserService {
           ? this.normalizeNullableText(input.avatarUrl)
           : undefined,
     };
-    const updated = await this.userRepository.updateProfile(repositoryInput);
+    const didUpdate = await this.userRepository.updateProfile({
+      ...payload,
+      updatedAt,
+    });
+
+    if (!didUpdate) {
+      throw new Error("Failed to update profile: user not found");
+    }
+
+    const touched = await this.userRepository.touchUser({
+      id: input.userId,
+      updatedAt,
+    });
+
+    if (!touched) {
+      throw new Error("Failed to update profile: user not found");
+    }
+
+    const updated = await this.userRepository.findById(input.userId);
     return this.ensureUser(updated, "Failed to update profile: user not found");
   }
 

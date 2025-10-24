@@ -1,21 +1,22 @@
+import "reflect-metadata";
+import { eq } from "drizzle-orm";
+import { inject, singleton } from "tsyringe";
+import type { DatabaseClient } from "@/db/client";
+import { DatabaseClientToken } from "@/db/di";
 import {
-  type CreateUserInput,
+  type InsertUserInput,
+  type InsertUserProfileInput,
+  type TouchUserInput,
   type UpdateUserPasswordInput,
   type UpdateUserProfileInput,
   type UserRepository,
   type UserWithProfile,
-} from "./user-repository";
-import "reflect-metadata";
-import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
-import { inject, singleton } from "tsyringe";
-import type { DatabaseClient } from "@/db/client";
-import { users, type NewUser } from "@/db/schema/users";
+} from "@/repository/user/user-repository";
+import { users } from "@/db/schema/users";
 import {
   userProfiles,
   type NewUserProfile,
 } from "@/db/schema/user-profiles";
-import { DatabaseClientToken } from "@/db/di";
 import { InvalidPasswordHashError } from "@/core/errors/password";
 
 @singleton()
@@ -25,30 +26,106 @@ export class DrizzleUserRepository implements UserRepository {
     private readonly client: DatabaseClient,
   ) {}
 
-  private buildNewUser = (
-    input: CreateUserInput,
-    now: Date,
-    id: string,
-  ): NewUser & { id: string } => ({
-    id,
-    email: input.email.toLowerCase(),
-    hashedPassword: input.hashedPassword,
-    createdAt: now,
-    updatedAt: now,
-  });
+  async insertUser(input: InsertUserInput): Promise<void> {
+    this.assertHashedPassword(input.hashedPassword);
+    this.client
+      .insert(users)
+      .values({
+        id: input.id,
+        email: input.email.toLowerCase(),
+        hashedPassword: input.hashedPassword,
+        createdAt: input.createdAt,
+        updatedAt: input.updatedAt,
+      })
+      .run();
+  }
 
-  private buildNewProfile = (
-    userId: string,
-    input: CreateUserInput,
-    now: Date,
-  ): NewUserProfile => ({
-    userId,
-    username: this.normalizeUsername(input.username),
-    bio: this.normalizeNullableText(input.bio, 30),
-    avatarUrl: this.normalizeNullableText(input.avatarUrl),
-    createdAt: now,
-    updatedAt: now,
-  });
+  async insertUserProfile(input: InsertUserProfileInput): Promise<void> {
+    const record: NewUserProfile = {
+      userId: input.userId,
+      username: this.normalizeUsername(input.username),
+      bio: this.normalizeNullableText(input.bio, 30),
+      avatarUrl: this.normalizeNullableText(input.avatarUrl),
+      createdAt: input.createdAt,
+      updatedAt: input.updatedAt,
+    };
+
+    this.client.insert(userProfiles).values(record).run();
+  }
+
+  async touchUser({ id, updatedAt }: TouchUserInput): Promise<boolean> {
+    const result = this.client
+      .update(users)
+      .set({ updatedAt })
+      .where(eq(users.id, id))
+      .run();
+    return Boolean(result.changes);
+  }
+
+  async findByEmail(email: string): Promise<UserWithProfile | undefined> {
+    const normalized = email.toLowerCase();
+    return this.client.query.users.findFirst({
+      where: (table, { eq: equals }) => equals(table.email, normalized),
+      with: { profile: true },
+    });
+  }
+
+  async findById(id: string): Promise<UserWithProfile | undefined> {
+    return this.client.query.users.findFirst({
+      where: (table, { eq: equals }) => equals(table.id, id),
+      with: { profile: true },
+    });
+  }
+
+  async updatePassword({
+    id,
+    hashedPassword,
+    updatedAt,
+  }: UpdateUserPasswordInput): Promise<boolean> {
+    this.assertHashedPassword(hashedPassword);
+    const result = this.client
+      .update(users)
+      .set({ hashedPassword, updatedAt })
+      .where(eq(users.id, id))
+      .run();
+    return Boolean(result.changes);
+  }
+
+  async updateProfile({
+    id,
+    username,
+    bio,
+    avatarUrl,
+    updatedAt,
+  }: UpdateUserProfileInput): Promise<boolean> {
+    const updates: Partial<NewUserProfile> = {};
+
+    if (username !== undefined) {
+      updates.username = this.normalizeUsername(username);
+    }
+
+    if (bio !== undefined) {
+      updates.bio = this.normalizeNullableText(bio, 30);
+    }
+
+    if (avatarUrl !== undefined) {
+      updates.avatarUrl = this.normalizeNullableText(avatarUrl);
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return true;
+    }
+
+    updates.updatedAt = updatedAt;
+
+    const result = this.client
+      .update(userProfiles)
+      .set(updates)
+      .where(eq(userProfiles.userId, id))
+      .run();
+
+    return Boolean(result.changes);
+  }
 
   private assertHashedPassword(hash: string): void {
     const sha256Regex = /^[a-f0-9]{64}$/i;
@@ -81,110 +158,5 @@ export class DrizzleUserRepository implements UserRepository {
     }
     return trimmed;
   }
-
-  async create(input: CreateUserInput): Promise<UserWithProfile> {
-    this.assertHashedPassword(input.hashedPassword);
-    const now = new Date();
-    const id = randomUUID();
-    const userRecord = this.buildNewUser(input, now, id);
-    const profileRecord = this.buildNewProfile(id, input, now);
-
-    this.client.transaction((tx) => {
-      tx.insert(users).values(userRecord).run();
-      tx.insert(userProfiles).values(profileRecord).run();
-    });
-
-    const created = await this.findById(id);
-    if (!created) {
-      throw new Error("Failed to persist user record");
-    }
-
-    return created;
-  }
-
-  async findByEmail(email: string): Promise<UserWithProfile | undefined> {
-    const normalized = email.toLowerCase();
-    return this.client.query.users.findFirst({
-      where: (table, { eq: equals }) => equals(table.email, normalized),
-      with: { profile: true },
-    });
-  }
-
-  async findById(id: string): Promise<UserWithProfile | undefined> {
-    return this.client.query.users.findFirst({
-      where: (table, { eq: equals }) => equals(table.id, id),
-      with: { profile: true },
-    });
-  }
-
-  async updatePassword({
-    id,
-    hashedPassword,
-  }: UpdateUserPasswordInput): Promise<UserWithProfile | undefined> {
-    this.assertHashedPassword(hashedPassword);
-    const now = new Date();
-    const result = await this.client
-      .update(users)
-      .set({ hashedPassword, updatedAt: now })
-      .where(eq(users.id, id))
-      .run();
-
-    if (!result.changes) {
-      return undefined;
-    }
-
-    return this.findById(id);
-  }
-
-  async updateProfile({
-    id,
-    username,
-    bio,
-    avatarUrl,
-  }: UpdateUserProfileInput): Promise<UserWithProfile | undefined> {
-    const updates: Partial<NewUserProfile> = {};
-
-    if (username !== undefined) {
-      updates.username = this.normalizeUsername(username);
-    }
-
-    if (bio !== undefined) {
-      updates.bio = this.normalizeNullableText(bio, 30);
-    }
-
-    if (avatarUrl !== undefined) {
-      updates.avatarUrl = this.normalizeNullableText(avatarUrl);
-    }
-
-    if (Object.keys(updates).length === 0) {
-      return this.findById(id);
-    }
-
-    const now = new Date();
-    const didUpdate = this.client.transaction((tx) => {
-      const profileResult = tx
-        .update(userProfiles)
-        .set({ ...updates, updatedAt: now })
-        .where(eq(userProfiles.userId, id))
-        .run();
-
-      if (!profileResult.changes) {
-        return false;
-      }
-
-      tx
-        .update(users)
-        .set({ updatedAt: now })
-        .where(eq(users.id, id))
-        .run();
-
-      return true;
-    });
-
-    if (!didUpdate) {
-      return undefined;
-    }
-
-    return this.findById(id);
-  }
 }
+
