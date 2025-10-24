@@ -60,8 +60,9 @@ export class DefaultArticleServiceImpl implements ArticleService {
     options?: ArticleListOptions,
   ): Promise<ArticleListResult> {
     const req = this.toRepositoryPaginationOptions(options);
+    const limit = req.limit;
     const rows = await this.repository.findByAuthor(authorId, req);
-    return this.toListResult(rows, req.limit);
+    return this.toListResult(rows, limit);
   }
 
   async listPublicByCategory(
@@ -69,8 +70,9 @@ export class DefaultArticleServiceImpl implements ArticleService {
     options?: ArticleListOptions,
   ): Promise<ArticleListResult> {
     const req = this.toRepositoryPaginationOptions(options);
+    const limit = req.limit;
     const rows = await this.repository.listPublicByCategory(category, req);
-    return this.toListResult(rows, req.limit);
+    return this.toListResult(rows, limit);
   }
 
   async update(
@@ -119,7 +121,7 @@ export class DefaultArticleServiceImpl implements ArticleService {
 
   private toRepositoryPaginationOptions(
     options?: ArticleListOptions,
-  ): ArticlePaginationOptions {
+  ): ArticlePaginationOptions & { limit: number } {
     const limit = Math.min(
       Math.max(options?.limit ?? DEFAULT_PAGE_SIZE, 1),
       MAX_PAGE_SIZE,

@@ -46,6 +46,7 @@ const optionalBioSchema = z
         maximum: 30,
         type: "string",
         inclusive: true,
+        origin: "string",
         message: "자기소개는 30자 이하로 입력해주세요.",
       });
       return z.NEVER;

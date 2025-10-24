@@ -1,6 +1,7 @@
 import type { Article } from "@/db/schema/articles";
 import type { UserProfile } from "@/db/schema/user-profiles";
-import type { ArticleModel, ArticleAuthorModel } from "@/model/article/article";
+import type { ArticleModel } from "@/model/article/article";
+import type { UserProfileModel } from "@/model/user/user-profile";
 
 const toTimestampString = (value: Article["createdAt"]): string => {
   if (value instanceof Date) {
@@ -28,7 +29,7 @@ const toNumber = (value: unknown): number => {
 
 const toAuthorModel = (
   profile: UserProfile | null | undefined,
-): ArticleAuthorModel | null => {
+): UserProfileModel | null => {
   if (!profile) {
     return null;
   }
@@ -46,7 +47,6 @@ export const toArticleModel = (
   authorProfile: UserProfile | null | undefined,
 ): ArticleModel => ({
   id: article.id,
-  authorId: article.authorId,
   title: article.title,
   content: article.content,
   category: article.category,
