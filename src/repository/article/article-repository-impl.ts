@@ -14,7 +14,7 @@ import { sql } from "drizzle-orm";
 import type { DatabaseClient } from "@/db/client";
 import { articles } from "@/db/schema/articles";
 import { userProfiles } from "@/db/schema/user-profiles";
-import { DatabaseClientToken } from "@/db/di";
+import { DatabaseClientToken } from "@/db/tokens";
 import type { ArticleCategory } from "@/core/constants/article";
 import {
   DEFAULT_PAGE_SIZE,

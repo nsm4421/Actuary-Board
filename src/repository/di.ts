@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import "@/db/di";
 import { container } from "tsyringe";
 import type { UserRepository } from "@/repository/user/user-repository";
 import { DrizzleUserRepository } from "@/repository/user/user-repository-impl";

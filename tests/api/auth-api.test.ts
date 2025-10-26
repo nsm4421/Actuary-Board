@@ -1,9 +1,9 @@
 import "reflect-metadata";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { setupApiTest } from "@tests/api/setup";
-import { POST as signUp } from "@/app/api/sign-up/route";
-import { POST as signIn } from "@/app/api/sign-in/route";
-import { POST as signOut } from "@/app/api/sign-out/route";
+import { POST as signUp } from "@/app/api/(auth)/sign-up/route";
+import { POST as signIn } from "@/app/api/(auth)/sign-in/route";
+import { POST as signOut } from "@/app/api/(auth)/sign-out/route";
 
 const jsonRequest = (url: string, data: unknown) =>
   new Request(url, {

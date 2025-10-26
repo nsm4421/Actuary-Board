@@ -8,7 +8,7 @@ import type {
   UserRepository,
 } from "@/repository/user/user-repository";
 import { createTestDatabase } from "@tests/utils/test-database";
-import { DatabaseClientToken } from "@/db/di";
+import { DatabaseClientToken } from "@/db/tokens";
 import type { DatabaseClient } from "@/db/client";
 import { TransactionManager } from "@/db/transaction-manager";
 

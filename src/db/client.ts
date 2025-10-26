@@ -20,6 +20,49 @@ const ensureDirectory = (filePath: string) => {
   }
 };
 
+type ColumnInfoRow = { name: string };
+
+const tableExists = (sqlite: Database.Database, table: string) => {
+  return Boolean(
+    sqlite
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name = ? LIMIT 1",
+      )
+      .get(table),
+  );
+};
+
+const ensureArticleLegacyColumns = (sqlite: Database.Database) => {
+  if (!tableExists(sqlite, "articles")) {
+    return;
+  }
+
+  const columns = sqlite
+    .prepare("PRAGMA table_info(articles)")
+    .all() as ColumnInfoRow[];
+  const hasColumn = (name: string) =>
+    columns.some((column) => column.name === name);
+
+  const statements: string[] = [];
+  if (!hasColumn("is_public")) {
+    statements.push(
+      "ALTER TABLE articles ADD COLUMN is_public INTEGER NOT NULL DEFAULT 1",
+    );
+  }
+  if (!hasColumn("like_count")) {
+    statements.push(
+      "ALTER TABLE articles ADD COLUMN like_count INTEGER NOT NULL DEFAULT 0",
+    );
+  }
+  if (!hasColumn("comment_count")) {
+    statements.push(
+      "ALTER TABLE articles ADD COLUMN comment_count INTEGER NOT NULL DEFAULT 0",
+    );
+  }
+
+  statements.forEach((statement) => sqlite.exec(statement));
+};
+
 @singleton()
 export class SqliteDatabaseClient {
   private readonly client: DatabaseClient;
@@ -27,6 +70,7 @@ export class SqliteDatabaseClient {
   constructor() {
     ensureDirectory(databasePath);
     const sqlite = new Database(databasePath);
+    ensureArticleLegacyColumns(sqlite);
 
     const drizzleClient = drizzle(sqlite, { schema });
 

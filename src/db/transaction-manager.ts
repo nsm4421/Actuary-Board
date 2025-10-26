@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { inject, singleton } from "tsyringe";
 import type { DatabaseClient } from "@/db/client";
-import { DatabaseClientToken } from "@/db/di";
+import { DatabaseClientToken } from "@/db/tokens";
 
 type TransactionState = {
   depth: number;

@@ -2,7 +2,7 @@ import "reflect-metadata";
 import { eq } from "drizzle-orm";
 import { inject, singleton } from "tsyringe";
 import type { DatabaseClient } from "@/db/client";
-import { DatabaseClientToken } from "@/db/di";
+import { DatabaseClientToken } from "@/db/tokens";
 import {
   type InsertUserInput,
   type InsertUserProfileInput,
@@ -159,4 +159,3 @@ export class DrizzleUserRepository implements UserRepository {
     return trimmed;
   }
 }
-
